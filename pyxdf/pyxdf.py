@@ -234,7 +234,7 @@ def load_xdf(filename,
 
         # for each chunk...
         StreamId = None
-        while True:
+        while f.tell() < filesize:
 
             # noinspection PyBroadException
             try:
@@ -295,6 +295,34 @@ def load_xdf(filename,
                     logger.error('found likely XDF file corruption (%s), '
                                  'scanning forward to next boundary chunk.' % e)
                     _scan_forward(f)
+            elif tag == 7:
+                # read [Samples_v2] chunk
+                # read [StreamId] [NumSamples] [NumChannels] [TypeID]
+                s, num_samples, num_channels, valuetype = struct.unpack('<IIIB', f.read(13))
+                s = temp[s]
+                logger.info('reading tag7 [%s chs, %s samples, type %s]' % (num_channels, num_samples, valuetype))
+                if s.fmt != 'string':
+                    assert num_channels == s.nchns
+                    stamps = np.fromfile(f, np.float64, num_samples)
+                    values = np.fromfile(f, s.dtype, (num_samples * num_channels))
+                    values.shape = (num_samples, num_channels)
+                else:
+                    raise 'Not yet implemented'
+                if on_chunk is not None:
+                    values, stamps, streams[s] = on_chunk(values, stamps, streams[s], s)
+
+                if s.srate:
+                    # TODO: fill in missing timestamps after all chunks are read
+                    v = np.arange(stamps.size)
+                    idx = np.where(stamps!=0, v, 0)
+                    # replace indices of missing values with index of last known timestamp
+                    lastindex = np.maximum.accumulate(np.where(stamps!=0, v, 0))
+                    # add delta time since last known value to all values
+                    stamps = stamps[lastindex] + (v-lastindex) / float(s.srate)
+                
+                # append to the time series...
+                temp[s].time_series.append(values)
+                temp[s].time_stamps.append(stamps)
             elif tag == 6:
                 # read [StreamFooter] chunk
                 xml_string = f.read(chunklen - 6)
@@ -603,3 +631,10 @@ def _robust_fit(A, y, rho=1, iters=1000):
         z = rho / (1 + rho) * d + 1 / (1 + rho) * tmp * d
         u = d - z
     return x
+
+
+try:
+    import cython
+except ImportError:
+    pass
+
