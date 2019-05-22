@@ -8,11 +8,39 @@ from collections import OrderedDict
 import xml.etree.ElementTree as ET
 from typing import List
 
-__all__ = ['resolve_streams']
+__all__ = ['resolve_streamids']
 
 logger = logging.getLogger(__name__)
 # %%
 def resolve_streamids(filename:str, parameters:List[dict,]) -> List[int,]:
+    """Parses a file and finds all streams matching the given parameters
+    
+    args:
+    -----
+    
+    filename:str
+        path to a valid xdf file
+    
+    parameters: List[dict, ]
+        a list of dictionaries. Each dictionary resembles on stream and
+        follows the logic of LSL
+    
+    returns:
+    -------
+    
+    sids: List[int,]
+        an unsorted list of streamids matching the parameters
+    
+    Example
+    ------
+    
+    resolve_streamids('minimal.xdf', [{'type':'EEG'}, {'type':'Markers'}])
+    
+    would return a list of all stream ids this file of those streams which have 
+    type  EEG or  Markers
+    
+    """
+    
     streams = parse_streams(filename)
     sids = match_streaminfo_with_parameters(streams, parameters)
     return sids
